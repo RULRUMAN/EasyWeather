@@ -341,6 +341,27 @@
     flex-wrap:wrap;
     margin-bottom:20px;
   }
+
+  /* sub tabs within history */
+  .sub-tabs{
+    display:flex;
+    gap:6px;
+    margin-bottom:20px;
+  }
+  .sub-tab-btn{
+    background:var(--bg);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:8px 16px;
+    font-size:13px;
+    font-weight:700;
+    color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .sub-tab-btn.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .sub-panel{display:none;}
+  .sub-panel.active{display:block;animation:fadein .2s ease;}
+
   .field{display:flex;flex-direction:column;gap:6px;}
   .field label{font-size:12px;color:var(--ink-faint);font-weight:600;}
   .field input[type=date]{
@@ -423,6 +444,54 @@
     .summary-row{grid-template-columns:1fr 1fr;}
     .main{padding:24px 16px 32px;}
     .sidebar{padding:20px 16px 24px;}
+  }
+
+  @media (max-width:520px){
+    body{font-size:15px;}
+    .sidebar{padding:16px 14px 20px;gap:16px;}
+    .brand{font-size:19px;}
+    .hero{padding:20px 16px 18px;border-radius:var(--radius-md);}
+    .hero-temp{font-size:52px;}
+    .hero-temp sup{font-size:22px;}
+    .hero-grid{grid-template-columns:1fr 1fr;gap:8px;}
+    .hero-stat{padding:9px 10px;}
+    .sun-times{flex-direction:column;gap:10px;align-items:flex-start;}
+
+    .main{padding:18px 12px 28px;}
+    .tabs{gap:2px;-webkit-overflow-scrolling:touch;}
+    .tab-btn{padding:9px 12px 11px;font-size:13.5px;}
+    .panel-title{font-size:19px;}
+    .panel-sub{font-size:12.5px;margin-bottom:14px;}
+
+    .card{padding:14px;border-radius:var(--radius-md);margin-bottom:14px;}
+    .chart-box{height:190px;}
+    .chart-box.tall{height:220px;}
+
+    .hour-card{width:66px;padding:11px 4px 10px;}
+    .hour-card-temp{font-size:14px;}
+
+    .day-row{grid-template-columns:56px 22px 1fr 84px 40px;gap:6px;padding:10px 2px;}
+    .day-row-name{font-size:13px;}
+    .day-row-range{font-size:12px;}
+    .day-row-pop{font-size:11px;}
+
+    .summary-row{grid-template-columns:1fr 1fr;gap:8px;}
+    .summary-stat{padding:11px 12px;}
+    .summary-stat-value{font-size:17px;}
+
+    .history-controls{gap:10px;}
+    .field{flex:1 1 140px;}
+    .field input[type=date]{width:100%;}
+    .go-btn{width:100%;padding:12px 20px;}
+    .quick-ranges{width:100%;}
+    .chip{flex:1;text-align:center;}
+    .sub-tabs{gap:6px;}
+    .sub-tab-btn{flex:1;text-align:center;padding:9px 10px;font-size:12.5px;}
+
+    table{font-size:12px;}
+    th, td{padding:9px 6px;}
+
+    .legend-row{flex-wrap:wrap;gap:10px 14px;font-size:11.5px;}
   }
 </style>
 </head>
@@ -509,38 +578,79 @@
       <h2 class="panel-title">과거 날씨 데이터</h2>
       <p class="panel-sub">원하는 기간을 선택해 지난 기록을 확인하세요.</p>
 
-      <div class="history-controls">
-        <div class="field">
-          <label for="startDate">시작일</label>
-          <input type="date" id="startDate">
-        </div>
-        <div class="field">
-          <label for="endDate">종료일</label>
-          <input type="date" id="endDate">
-        </div>
-        <div class="field">
-          <label>&nbsp;</label>
-          <div class="quick-ranges">
-            <button class="chip" data-range="30">최근 30일</button>
-            <button class="chip" data-range="90">최근 90일</button>
-            <button class="chip" data-range="365">최근 1년</button>
+      <div class="sub-tabs">
+        <button class="sub-tab-btn active" data-subtab="range">기간별 조회</button>
+        <button class="sub-tab-btn" data-subtab="sameday">매년 같은 날 비교</button>
+      </div>
+
+      <!-- 기간별 조회 -->
+      <div class="sub-panel active" id="subtab-range">
+        <div class="history-controls">
+          <div class="field">
+            <label for="startDate">시작일</label>
+            <input type="date" id="startDate">
           </div>
+          <div class="field">
+            <label for="endDate">종료일</label>
+            <input type="date" id="endDate">
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <div class="quick-ranges">
+              <button class="chip" data-range="30">최근 30일</button>
+              <button class="chip" data-range="90">최근 90일</button>
+              <button class="chip" data-range="365">최근 1년</button>
+            </div>
+          </div>
+          <button class="go-btn" id="historyGoBtn">조회하기</button>
         </div>
-        <button class="go-btn" id="historyGoBtn">조회하기</button>
+
+        <div class="summary-row" id="historySummary"></div>
+
+        <div class="card">
+          <div class="legend-row">
+            <div class="legend-item"><span class="legend-dot" style="background:var(--warm)"></span>최고기온</div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--cool)"></span>최저기온</div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--rain)"></span>강수량</div>
+          </div>
+          <div class="chart-box tall"><canvas id="historyChart"></canvas></div>
+        </div>
+        <div class="card table-wrap">
+          <table id="historyTable"></table>
+        </div>
       </div>
 
-      <div class="summary-row" id="historySummary"></div>
-
-      <div class="card">
-        <div class="legend-row">
-          <div class="legend-item"><span class="legend-dot" style="background:var(--warm)"></span>최고기온</div>
-          <div class="legend-item"><span class="legend-dot" style="background:var(--cool)"></span>최저기온</div>
-          <div class="legend-item"><span class="legend-dot" style="background:var(--rain)"></span>강수량</div>
+      <!-- 매년 같은 날 비교 -->
+      <div class="sub-panel" id="subtab-sameday">
+        <p class="panel-sub" style="margin-top:-8px">특정 날짜(월·일)를 고르면 최근 몇 년간 그 날의 기온과 날씨를 나란히 비교합니다.</p>
+        <div class="history-controls">
+          <div class="field">
+            <label for="sameDayDate">날짜 (월·일 기준)</label>
+            <input type="date" id="sameDayDate">
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <div class="quick-ranges">
+              <button class="chip" data-years="10">최근 10년</button>
+              <button class="chip" data-years="20">최근 20년</button>
+            </div>
+          </div>
+          <button class="go-btn" id="sameDayGoBtn">비교하기</button>
         </div>
-        <div class="chart-box tall"><canvas id="historyChart"></canvas></div>
-      </div>
-      <div class="card table-wrap">
-        <table id="historyTable"></table>
+
+        <div class="summary-row" id="sameDaySummary"></div>
+
+        <div class="card">
+          <div class="legend-row">
+            <div class="legend-item"><span class="legend-dot" style="background:var(--warm)"></span>최고기온</div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--cool)"></span>최저기온</div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--rain)"></span>강수량</div>
+          </div>
+          <div class="chart-box tall"><canvas id="sameDayChart"></canvas></div>
+        </div>
+        <div class="card table-wrap">
+          <table id="sameDayTable"></table>
+        </div>
       </div>
     </section>
 
@@ -989,16 +1099,16 @@ function setQuickRange(days){
   startDateInput.value = fmtDate(start);
   endDateInput.value = fmtDate(end);
 }
-document.querySelectorAll('.chip').forEach(chip=>{
+document.querySelectorAll('.chip[data-range]').forEach(chip=>{
   chip.addEventListener('click', ()=>{
-    document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+    document.querySelectorAll('.chip[data-range]').forEach(c=>c.classList.remove('active'));
     chip.classList.add('active');
     setQuickRange(parseInt(chip.dataset.range));
     fetchHistory();
   });
 });
 document.getElementById('historyGoBtn').addEventListener('click', ()=>{
-  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  document.querySelectorAll('.chip[data-range]').forEach(c=>c.classList.remove('active'));
   fetchHistory();
 });
 setQuickRange(30);
@@ -1078,6 +1188,150 @@ function renderHistory(data){
         <td class="rain">${(d.precipitation_sum[i]||0).toFixed(1)}mm</td>
       </tr>`;
     }).reverse().join('')}</tbody>
+  `;
+}
+
+/* ---------- 과거 데이터: 하위 탭 전환 ---------- */
+document.querySelectorAll('.sub-tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.sub-tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.sub-panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('subtab-'+btn.dataset.subtab).classList.add('active');
+  });
+});
+
+/* ---------- 매년 같은 날 비교 ---------- */
+const sameDayDateInput = document.getElementById('sameDayDate');
+let sameDayYears = 10;
+
+// 기본값: 오늘 날짜
+sameDayDateInput.value = fmtDate(new Date());
+
+document.querySelectorAll('.chip[data-years]').forEach(chip=>{
+  chip.addEventListener('click', ()=>{
+    document.querySelectorAll('.chip[data-years]').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    sameDayYears = parseInt(chip.dataset.years);
+    fetchSameDay();
+  });
+});
+document.getElementById('sameDayGoBtn').addEventListener('click', fetchSameDay);
+document.querySelector('.chip[data-years="10"]').classList.add('active');
+
+function yearsToFetch(monthDayDate, count){
+  const month = monthDayDate.getMonth();
+  const day = monthDayDate.getDate();
+  const today = new Date();
+  const isLeapDay = (month===1 && day===29);
+  const years = [];
+  let y = today.getFullYear();
+  // 올해 그 날짜가 이미 지났으면 올해도 포함, 아니면 작년부터
+  const thisYearDate = new Date(y, month, day);
+  if(thisYearDate > today) y -= 1;
+  while(years.length < count){
+    if(isLeapDay && !isLeapYear(y)){ y -= 1; continue; } // 윤년이 아니면 2/29 건너뜀
+    years.push(y);
+    y -= 1;
+  }
+  return years.reverse(); // 오래된 순 → 최신 순
+}
+function isLeapYear(y){ return (y%4===0 && y%100!==0) || y%400===0; }
+
+async function fetchSameDay(){
+  const raw = sameDayDateInput.value;
+  if(!raw) return;
+  const base = new Date(raw+'T00:00:00');
+  const years = yearsToFetch(base, sameDayYears);
+  const container = document.getElementById('sameDaySummary');
+  container.innerHTML = `<div class="loading" style="grid-column:1/-1"><div class="spinner"></div>${years.length}개 연도 데이터를 불러오는 중…</div>`;
+
+  const requests = years.map(y=>{
+    const dateStr = `${y}-${String(base.getMonth()+1).padStart(2,'0')}-${String(base.getDate()).padStart(2,'0')}`;
+    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${state.lat}&longitude=${state.lon}` +
+      `&start_date=${dateStr}&end_date=${dateStr}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code&timezone=auto`;
+    return fetch(url).then(r=>{ if(!r.ok) throw new Error('http '+r.status); return r.json(); }).then(json=>({year:y, dateStr, daily:json.daily}));
+  });
+
+  try{
+    const settled = await Promise.allSettled(requests);
+    const rows = settled
+      .filter(s => s.status==='fulfilled' && s.value.daily && s.value.daily.time && s.value.daily.time.length)
+      .map(s=>{
+        const d = s.value.daily;
+        return {
+          year: s.value.year,
+          date: s.value.dateStr,
+          max: d.temperature_2m_max[0],
+          min: d.temperature_2m_min[0],
+          rain: d.precipitation_sum[0] || 0,
+          code: d.weather_code[0]
+        };
+      });
+    if(!rows.length){
+      container.innerHTML = `<div class="error-box" style="grid-column:1/-1">해당 날짜의 과거 기록을 찾지 못했습니다.</div>`;
+      return;
+    }
+    renderSameDay(rows, base);
+  }catch(err){
+    console.error('[날씨판] 매년 같은 날 비교 오류:', err);
+    container.innerHTML = `<div class="error-box" style="grid-column:1/-1">데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.</div>`;
+  }
+}
+
+function renderSameDay(rows, base){
+  const maxes = rows.map(r=>r.max).filter(v=>v!=null);
+  const mins = rows.map(r=>r.min).filter(v=>v!=null);
+  const avgMax = maxes.reduce((a,b)=>a+b,0)/(maxes.length||1);
+  const avgMin = mins.reduce((a,b)=>a+b,0)/(mins.length||1);
+  const hottestRow = rows.reduce((a,b)=> (b.max>a.max ? b : a));
+  const coldestRow = rows.reduce((a,b)=> (b.min<a.min ? b : a));
+  const dateLabel = `${base.getMonth()+1}월 ${base.getDate()}일`;
+
+  document.getElementById('sameDaySummary').innerHTML = `
+    <div class="summary-stat"><div class="summary-stat-label">${dateLabel} 평균 최고기온</div><div class="summary-stat-value" style="color:#E8622C">${avgMax.toFixed(1)}°C</div></div>
+    <div class="summary-stat"><div class="summary-stat-label">${dateLabel} 평균 최저기온</div><div class="summary-stat-value" style="color:#2F6FED">${avgMin.toFixed(1)}°C</div></div>
+    <div class="summary-stat"><div class="summary-stat-label">가장 더웠던 해</div><div class="summary-stat-value">${hottestRow.year}년 (${hottestRow.max.toFixed(1)}°)</div></div>
+    <div class="summary-stat"><div class="summary-stat-label">가장 추웠던 해</div><div class="summary-stat-value">${coldestRow.year}년 (${coldestRow.min.toFixed(1)}°)</div></div>
+  `;
+
+  const labels = rows.map(r=>r.year+'년');
+
+  if(charts.sameDay) charts.sameDay.destroy();
+  charts.sameDay = new Chart(document.getElementById('sameDayChart'), {
+    data:{
+      labels,
+      datasets:[
+        { type:'bar', label:'강수량(mm)', data:rows.map(r=>r.rain), backgroundColor:'#DDEBFA', yAxisID:'y1', borderRadius:3, maxBarThickness:22, order:3 },
+        { type:'line', label:'최고기온', data:rows.map(r=>r.max), borderColor:'#E8622C', backgroundColor:'#E8622C', borderWidth:2.5, pointRadius:3, tension:0.2, yAxisID:'y', order:1 },
+        { type:'line', label:'최저기온', data:rows.map(r=>r.min), borderColor:'#2F6FED', backgroundColor:'#2F6FED', borderWidth:2.5, pointRadius:3, tension:0.2, yAxisID:'y', order:2 }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{ legend:{position:'top', align:'end', labels:{boxWidth:10, font:{size:11.5}}} },
+      scales:{
+        y:{ position:'left', grid:{color:'#E7EBEE'}, ticks:{callback:v=>v+'°', font:{size:11}} },
+        y1:{ position:'right', grid:{display:false}, ticks:{callback:v=>v+'mm', font:{size:11}} },
+        x:{ grid:{display:false}, ticks:{font:{size:11}} }
+      }
+    }
+  });
+
+  document.getElementById('sameDayTable').innerHTML = `
+    <thead><tr><th>연도</th><th>날짜</th><th>날씨</th><th>최고기온</th><th>최저기온</th><th>강수량</th></tr></thead>
+    <tbody>${rows.slice().reverse().map(r=>{
+      const info = wmoInfo(r.code);
+      return `<tr>
+        <td class="row-name">${r.year}년</td>
+        <td>${r.date}</td>
+        <td>${info.label}</td>
+        <td class="hi">${r.max!=null ? r.max.toFixed(1)+'°C' : '-'}</td>
+        <td class="lo">${r.min!=null ? r.min.toFixed(1)+'°C' : '-'}</td>
+        <td class="rain">${r.rain.toFixed(1)}mm</td>
+      </tr>`;
+    }).join('')}</tbody>
   `;
 }
 
