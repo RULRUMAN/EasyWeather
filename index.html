@@ -628,10 +628,11 @@ searchInput.addEventListener('input', debounce(async (e)=>{
   const q = e.target.value.trim();
   if(q.length < 1){ searchResults.classList.remove('show'); return; }
   try{
-    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=ko&format=json`);
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=20&language=ko&format=json`);
     const data = await res.json();
     renderSearchResults(data.results || []);
   }catch(err){
+    console.error('[날씨판] 지역 검색 오류:', err);
     searchResults.innerHTML = `<div class="search-empty">검색 중 오류가 발생했습니다.</div>`;
     searchResults.classList.add('show');
   }
@@ -643,15 +644,19 @@ function renderSearchResults(rawResults){
     searchResults.classList.add('show');
     return;
   }
+  // 산·강 등 지형지물은 제외하고 도시·행정구역만 남김 (P=마을/도시, A=행정구역)
+  const places = rawResults.filter(r => !r.feature_code || r.feature_code.startsWith('P') || r.feature_code.startsWith('A'));
+  const pool = places.length ? places : rawResults;
+
   // 같은 지점을 가리키는 중복 항목 제거 (위경도가 아주 가까우면 같은 곳으로 취급)
   const deduped = [];
-  rawResults.forEach(r=>{
+  pool.forEach(r=>{
     const dup = deduped.find(x => Math.abs(x.latitude-r.latitude) < 0.05 && Math.abs(x.longitude-r.longitude) < 0.05);
     if(!dup) deduped.push(r);
     else if((r.population||0) > (dup.population||0)) Object.assign(dup, r);
   });
-  // 인구가 많은(=더 잘 알려진) 지역이 위로 오도록 정렬
-  const results = deduped.sort((a,b)=>(b.population||0)-(a.population||0));
+  // 인구가 많은(=더 잘 알려진) 지역이 위로 오도록 정렬, 최대 6개만 표시
+  const results = deduped.sort((a,b)=>(b.population||0)-(a.population||0)).slice(0,6);
 
   searchResults.innerHTML = results.map((r,i)=>{
     const region = [r.admin1, r.country].filter(Boolean).join(', ');
@@ -702,22 +707,32 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 /* ===================== 데이터 로드 ===================== */
 async function loadAll(){
   renderHeroLoading();
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${state.lat}&longitude=${state.lon}` +
+    `&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,is_day` +
+    `&hourly=temperature_2m,precipitation_probability,weather_code` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset,wind_speed_10m_max,uv_index_max` +
+    `&timezone=auto&forecast_days=16`;
+
+  let data;
   try{
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${state.lat}&longitude=${state.lon}` +
-      `&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,is_day` +
-      `&hourly=temperature_2m,precipitation_probability,weather_code` +
-      `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset,wind_speed_10m_max,uv_index_max` +
-      `&timezone=auto&forecast_days=16`;
     const res = await fetch(url);
-    if(!res.ok) throw new Error('forecast failed');
-    const data = await res.json();
-    renderHero(data);
-    renderDaily(data);
-    renderWeekly(data);
-    loadMonthly();
+    if(!res.ok) throw new Error('forecast http status ' + res.status);
+    data = await res.json();
   }catch(err){
+    console.error('[날씨판] 예보 데이터 요청 실패:', err);
     document.getElementById('hero').innerHTML = `<div class="error-box">날씨 정보를 불러오지 못했습니다.<br>잠시 후 다시 시도해주세요.</div>`;
+    return;
   }
+
+  try{
+    renderHero(data);
+  }catch(err){
+    console.error('[날씨판] 현재 날씨 표시 오류:', err);
+    document.getElementById('hero').innerHTML = `<div class="error-box">현재 날씨를 표시하는 중 오류가 발생했습니다.<br>콘솔(F12)의 오류 메시지를 확인해주세요.</div>`;
+  }
+  try{ renderDaily(data); }catch(err){ console.error('[날씨판] 시간별 예보 표시 오류:', err); }
+  try{ renderWeekly(data); }catch(err){ console.error('[날씨판] 주간 예보 표시 오류:', err); }
+  loadMonthly();
 }
 
 function renderHeroLoading(){
@@ -923,6 +938,7 @@ async function loadMonthly(){
       </tr>`).join('')}</tbody>
     `;
   }catch(err){
+    console.error('[날씨판] 월별 데이터 오류:', err);
     monthlyChartEl.parentElement.innerHTML = `<div class="error-box">월별 데이터를 불러오지 못했습니다.</div>`;
   }
 }
@@ -965,6 +981,7 @@ async function fetchHistory(){
     const data = await res.json();
     renderHistory(data);
   }catch(err){
+    console.error('[날씨판] 과거 데이터 오류:', err);
     container.innerHTML = `<div class="error-box" style="grid-column:1/-1">데이터를 불러오지 못했습니다. 날짜 범위를 확인해주세요.</div>`;
   }
 }
