@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
   :root{
     --bg:#EFF2F4;
@@ -620,6 +620,24 @@ function labelForDate(dateStr, todayStr, tomorrowStr){
 }
 function debounce(fn, ms){let t; return (...a)=>{clearTimeout(t); t=setTimeout(()=>fn(...a), ms);};}
 
+/* ===================== 대한민국 주요 광역시·도 (검색 정확도 보정용) ===================== */
+const KR_MAJOR_PLACES = [
+  {name:"서울", region:"서울특별시, 대한민국", latitude:37.5665, longitude:126.9780, population:9411000},
+  {name:"부산", region:"부산광역시, 대한민국", latitude:35.1796, longitude:129.0756, population:3349000},
+  {name:"대구", region:"대구광역시, 대한민국", latitude:35.8714, longitude:128.6014, population:2385000},
+  {name:"인천", region:"인천광역시, 대한민국", latitude:37.4563, longitude:126.7052, population:2947000},
+  {name:"광주", region:"광주광역시, 대한민국", latitude:35.1595, longitude:126.8526, population:1441000},
+  {name:"대전", region:"대전광역시, 대한민국", latitude:36.3504, longitude:127.3845, population:1441000},
+  {name:"울산", region:"울산광역시, 대한민국", latitude:35.5384, longitude:129.3114, population:1121000},
+  {name:"세종", region:"세종특별자치시, 대한민국", latitude:36.4800, longitude:127.2890, population:385000},
+  {name:"수원", region:"경기도, 대한민국", latitude:37.2636, longitude:127.0286, population:1194000},
+  {name:"제주", region:"제주특별자치도, 대한민국", latitude:33.4996, longitude:126.5312, population:495000},
+];
+function findMajorPlace(query){
+  const q = query.trim();
+  return KR_MAJOR_PLACES.find(p => p.name === q || q === p.name + '광역시' || q === p.name + '특별시' || q === p.name + '특별자치시' || q === p.name + '특별자치도' || q === p.name + '시');
+}
+
 /* ===================== 지역 검색 ===================== */
 const searchInput = document.getElementById('searchInput');
 const searchResults = document.getElementById('searchResults');
@@ -627,43 +645,61 @@ const searchResults = document.getElementById('searchResults');
 searchInput.addEventListener('input', debounce(async (e)=>{
   const q = e.target.value.trim();
   if(q.length < 1){ searchResults.classList.remove('show'); return; }
+  const pinned = findMajorPlace(q);
   try{
     const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=20&language=ko&format=json`);
     const data = await res.json();
-    renderSearchResults(data.results || []);
+    renderSearchResults(data.results || [], pinned);
   }catch(err){
     console.error('[날씨판] 지역 검색 오류:', err);
-    searchResults.innerHTML = `<div class="search-empty">검색 중 오류가 발생했습니다.</div>`;
-    searchResults.classList.add('show');
+    if(pinned){
+      renderSearchResults([], pinned);
+    }else{
+      searchResults.innerHTML = `<div class="search-empty">검색 중 오류가 발생했습니다.</div>`;
+      searchResults.classList.add('show');
+    }
   }
 }, 350));
 
-function renderSearchResults(rawResults){
-  if(!rawResults.length){
-    searchResults.innerHTML = `<div class="search-empty">검색 결과가 없습니다.</div>`;
-    searchResults.classList.add('show');
-    return;
-  }
+function renderSearchResults(rawResults, pinned){
   // 산·강 등 지형지물은 제외하고 도시·행정구역만 남김 (P=마을/도시, A=행정구역)
   const places = rawResults.filter(r => !r.feature_code || r.feature_code.startsWith('P') || r.feature_code.startsWith('A'));
-  const pool = places.length ? places : rawResults;
+  const pool = (places.length ? places : rawResults).map(r => ({
+    name: r.name,
+    region: [r.admin1, r.country].filter(Boolean).join(', '),
+    latitude: r.latitude, longitude: r.longitude,
+    population: r.population || 0,
+    feature_code: r.feature_code
+  }));
 
   // 같은 지점을 가리키는 중복 항목 제거 (위경도가 아주 가까우면 같은 곳으로 취급)
   const deduped = [];
   pool.forEach(r=>{
     const dup = deduped.find(x => Math.abs(x.latitude-r.latitude) < 0.05 && Math.abs(x.longitude-r.longitude) < 0.05);
     if(!dup) deduped.push(r);
-    else if((r.population||0) > (dup.population||0)) Object.assign(dup, r);
+    else if(r.population > dup.population) Object.assign(dup, r);
   });
-  // 인구가 많은(=더 잘 알려진) 지역이 위로 오도록 정렬, 최대 6개만 표시
-  const results = deduped.sort((a,b)=>(b.population||0)-(a.population||0)).slice(0,6);
+  let sorted = deduped.sort((a,b)=> b.population - a.population);
+
+  // 대한민국 주요 도시는 정확도가 검증된 좌표를 최상단에 고정
+  if(pinned){
+    sorted = sorted.filter(r => Math.abs(r.latitude-pinned.latitude) > 0.3 || Math.abs(r.longitude-pinned.longitude) > 0.3);
+    sorted.unshift({...pinned, population: pinned.population});
+  }
+
+  const results = sorted.slice(0,6);
+
+  if(!results.length){
+    searchResults.innerHTML = `<div class="search-empty">검색 결과가 없습니다.</div>`;
+    searchResults.classList.add('show');
+    return;
+  }
 
   searchResults.innerHTML = results.map((r,i)=>{
-    const region = [r.admin1, r.country].filter(Boolean).join(', ');
     const pop = r.population ? `인구 ${r.population.toLocaleString()}명` : (r.feature_code || '');
     return `<div class="search-result-item" data-i="${i}">
       <span class="search-result-name">${r.name}</span>
-      <span class="search-result-region">${region}${pop ? ' · '+pop : ''}</span>
+      <span class="search-result-region">${r.region}${pop ? ' · '+pop : ''}</span>
     </div>`;
   }).join('');
   searchResults.classList.add('show');
@@ -671,7 +707,7 @@ function renderSearchResults(rawResults){
     el.addEventListener('click', ()=>{
       const r = results[i];
       state.lat = r.latitude; state.lon = r.longitude;
-      state.name = r.name; state.region = [r.admin1, r.country].filter(Boolean).join(', ');
+      state.name = r.name; state.region = r.region;
       searchInput.value = r.name;
       searchResults.classList.remove('show');
       loadAll();
