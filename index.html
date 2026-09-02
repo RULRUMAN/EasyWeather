@@ -637,17 +637,28 @@ searchInput.addEventListener('input', debounce(async (e)=>{
   }
 }, 350));
 
-function renderSearchResults(results){
-  if(!results.length){
+function renderSearchResults(rawResults){
+  if(!rawResults.length){
     searchResults.innerHTML = `<div class="search-empty">검색 결과가 없습니다.</div>`;
     searchResults.classList.add('show');
     return;
   }
+  // 같은 지점을 가리키는 중복 항목 제거 (위경도가 아주 가까우면 같은 곳으로 취급)
+  const deduped = [];
+  rawResults.forEach(r=>{
+    const dup = deduped.find(x => Math.abs(x.latitude-r.latitude) < 0.05 && Math.abs(x.longitude-r.longitude) < 0.05);
+    if(!dup) deduped.push(r);
+    else if((r.population||0) > (dup.population||0)) Object.assign(dup, r);
+  });
+  // 인구가 많은(=더 잘 알려진) 지역이 위로 오도록 정렬
+  const results = deduped.sort((a,b)=>(b.population||0)-(a.population||0));
+
   searchResults.innerHTML = results.map((r,i)=>{
     const region = [r.admin1, r.country].filter(Boolean).join(', ');
+    const pop = r.population ? `인구 ${r.population.toLocaleString()}명` : (r.feature_code || '');
     return `<div class="search-result-item" data-i="${i}">
       <span class="search-result-name">${r.name}</span>
-      <span class="search-result-region">${region}</span>
+      <span class="search-result-region">${region}${pop ? ' · '+pop : ''}</span>
     </div>`;
   }).join('');
   searchResults.classList.add('show');
